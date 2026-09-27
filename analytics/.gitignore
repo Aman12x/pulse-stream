@@ -2,3 +2,4 @@ pulse.duckdb
 data/
 target/
 logs/
+.user.yml
