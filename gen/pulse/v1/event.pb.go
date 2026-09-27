@@ -40,9 +40,13 @@ type Event struct {
 	// Commit only, e.g. app.bsky.feed.like.
 	Collection string `protobuf:"bytes,5,opt,name=collection,proto3" json:"collection,omitempty"`
 	// Commit only: create, update, or delete.
-	Operation     string `protobuf:"bytes,6,opt,name=operation,proto3" json:"operation,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Operation string `protobuf:"bytes,6,opt,name=operation,proto3" json:"operation,omitempty"`
+	// Added in v2. For likes, reposts, follows and blocks: the salted hash of the
+	// account on the other side, so it joins to that account's account_id. Empty
+	// for everything else and for events written by v1 producers.
+	SubjectAccountId string `protobuf:"bytes,7,opt,name=subject_account_id,json=subjectAccountId,proto3" json:"subject_account_id,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Event) Reset() {
@@ -117,11 +121,18 @@ func (x *Event) GetOperation() string {
 	return ""
 }
 
+func (x *Event) GetSubjectAccountId() string {
+	if x != nil {
+		return x.SubjectAccountId
+	}
+	return ""
+}
+
 var File_pulse_v1_event_proto protoreflect.FileDescriptor
 
 const file_pulse_v1_event_proto_rawDesc = "" +
 	"\n" +
-	"\x14pulse/v1/event.proto\x12\bpulse.v1\"\xac\x01\n" +
+	"\x14pulse/v1/event.proto\x12\bpulse.v1\"\xda\x01\n" +
 	"\x05Event\x12\x19\n" +
 	"\bevent_id\x18\x01 \x01(\tR\aeventId\x12\x1d\n" +
 	"\n" +
@@ -131,7 +142,8 @@ const file_pulse_v1_event_proto_rawDesc = "" +
 	"\n" +
 	"collection\x18\x05 \x01(\tR\n" +
 	"collection\x12\x1c\n" +
-	"\toperation\x18\x06 \x01(\tR\toperationB6Z4github.com/Aman12x/pulse-stream/gen/pulse/v1;pulsev1b\x06proto3"
+	"\toperation\x18\x06 \x01(\tR\toperation\x12,\n" +
+	"\x12subject_account_id\x18\a \x01(\tR\x10subjectAccountIdB6Z4github.com/Aman12x/pulse-stream/gen/pulse/v1;pulsev1b\x06proto3"
 
 var (
 	file_pulse_v1_event_proto_rawDescOnce sync.Once

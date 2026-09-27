@@ -108,3 +108,38 @@ func TestNormalizeRejectsMalformed(t *testing.T) {
 		}
 	}
 }
+
+func TestSubjectAccountIsHashedTargetOfLikeAndFollow(t *testing.T) {
+	h := NewHasher("salt")
+	target, _ := h.Normalize(decode(t, `{"did":"did:plc:target","time_us":1,"kind":"identity"}`))
+
+	likeJSON := `{"did":"did:plc:liker","time_us":2,"kind":"commit","commit":{"rev":"r1","operation":"create",
+		"collection":"app.bsky.feed.like","rkey":"k1","record":{"$type":"app.bsky.feed.like",
+		"subject":{"uri":"at://did:plc:target/app.bsky.feed.post/3abc","cid":"bafy"},"createdAt":"x"}}}`
+	like, err := h.Normalize(decode(t, likeJSON))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if like.SubjectAccountID != target.AccountID {
+		t.Fatalf("like subject = %q, want the target's account id %q", like.SubjectAccountID, target.AccountID)
+	}
+
+	followJSON := `{"did":"did:plc:follower","time_us":3,"kind":"commit","commit":{"rev":"r2","operation":"create",
+		"collection":"app.bsky.graph.follow","rkey":"k2","record":{"$type":"app.bsky.graph.follow","subject":"did:plc:target","createdAt":"x"}}}`
+	follow, _ := h.Normalize(decode(t, followJSON))
+	if follow.SubjectAccountID != target.AccountID {
+		t.Fatalf("follow subject = %q", follow.SubjectAccountID)
+	}
+}
+
+func TestNoSubjectWhereThereIsNone(t *testing.T) {
+	h := NewHasher("salt")
+	post, _ := h.Normalize(decode(t, postJSON))
+	del, _ := h.Normalize(decode(t, `{"did":"did:plc:x","time_us":1,"kind":"commit","commit":{"rev":"r","operation":"delete","collection":"app.bsky.feed.like","rkey":"k"}}`))
+	odd, _ := h.Normalize(decode(t, `{"did":"did:plc:x","time_us":1,"kind":"commit","commit":{"rev":"r","operation":"create","collection":"app.bsky.feed.like","rkey":"k","record":{"subject":{"uri":"https://not-an-at-uri"}}}}`))
+	for name, ev := range map[string]Event{"post": post, "delete": del, "non-at uri": odd} {
+		if ev.SubjectAccountID != "" {
+			t.Errorf("%s: SubjectAccountID = %q, want empty", name, ev.SubjectAccountID)
+		}
+	}
+}

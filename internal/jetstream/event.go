@@ -1,20 +1,24 @@
 // Package jetstream reads Bluesky's Jetstream feed and normalizes its events.
 //
-// Normalization is where privacy is enforced: the record body (post text, profile
-// fields) is never decoded, and the DID is replaced by a salted hash before an
-// event leaves this package.
+// Normalization is where privacy is enforced: of the record body only the
+// "subject" reference is decoded (post text, profile fields and everything else are
+// skipped), and every DID is replaced by a salted hash before an event leaves this
+// package.
 package jetstream
 
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 )
 
-// RawEvent is the subset of a Jetstream message the pipeline reads. The commit's
-// "record" field is deliberately absent so encoding/json skips it.
+// RawEvent is the subset of a Jetstream message the pipeline reads. From the
+// commit's record only "subject" is decoded; text and every other field are skipped
+// by encoding/json and never enter the pipeline.
 type RawEvent struct {
 	DID    string     `json:"did"`
 	TimeUS int64      `json:"time_us"`
@@ -27,6 +31,9 @@ type RawCommit struct {
 	Operation  string `json:"operation"`
 	Collection string `json:"collection"`
 	RKey       string `json:"rkey"`
+	Record     *struct {
+		Subject json.RawMessage `json:"subject"`
+	} `json:"record,omitempty"`
 }
 
 // Event is what goes onto Kafka.
@@ -37,6 +44,9 @@ type Event struct {
 	Kind       string `json:"kind"`
 	Collection string `json:"collection,omitempty"`
 	Operation  string `json:"operation,omitempty"`
+	// SubjectAccountID is the hashed account a like, repost, follow or block points
+	// at (schema v2). Same hash as AccountID, so the two join.
+	SubjectAccountID string `json:"subject_account_id,omitempty"`
 }
 
 // Hasher derives stable, salted identifiers. The same salt must be used by every
@@ -72,6 +82,9 @@ func (h Hasher) Normalize(r RawEvent) (Event, error) {
 		}
 		ev.Collection, ev.Operation = c.Collection, c.Operation
 		ev.EventID = h.hash("commit", r.DID, c.Collection, c.RKey, c.Rev, c.Operation)
+		if did := subjectDID(c); did != "" {
+			ev.SubjectAccountID = h.hash("account", did)
+		}
 	case "identity", "account":
 		// These carry no rev; Jetstream's time_us is stable across replays of one instance.
 		ev.EventID = h.hash(r.Kind, r.DID, strconv.FormatInt(r.TimeUS, 10))
@@ -79,4 +92,30 @@ func (h Hasher) Normalize(r RawEvent) (Event, error) {
 		return Event{}, fmt.Errorf("%w: unknown kind %q", errMalformed, r.Kind)
 	}
 	return ev, nil
+}
+
+// subjectDID extracts the target DID from a record's subject: a strong ref
+// ({"uri": "at://did/..."}) for likes and reposts, a bare DID for follows and blocks.
+func subjectDID(c *RawCommit) string {
+	if c.Record == nil || len(c.Record.Subject) == 0 {
+		return ""
+	}
+	var did string
+	if json.Unmarshal(c.Record.Subject, &did) != nil {
+		var ref struct {
+			URI string `json:"uri"`
+		}
+		if json.Unmarshal(c.Record.Subject, &ref) != nil {
+			return ""
+		}
+		rest, ok := strings.CutPrefix(ref.URI, "at://")
+		if !ok {
+			return ""
+		}
+		did, _, _ = strings.Cut(rest, "/")
+	}
+	if !strings.HasPrefix(did, "did:") {
+		return ""
+	}
+	return did
 }

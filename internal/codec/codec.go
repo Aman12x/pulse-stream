@@ -80,10 +80,11 @@ func Decode(b []byte) (jetstream.Event, Info, error) {
 
 func toProto(ev jetstream.Event) *pulsev1.Event {
 	return &pulsev1.Event{EventId: ev.EventID, AccountId: ev.AccountID, TimeUs: ev.TimeUS,
-		Kind: ev.Kind, Collection: ev.Collection, Operation: ev.Operation}
+		Kind: ev.Kind, Collection: ev.Collection, Operation: ev.Operation, SubjectAccountId: ev.SubjectAccountID}
 }
 
 func fromProto(pb *pulsev1.Event) jetstream.Event {
 	return jetstream.Event{EventID: pb.GetEventId(), AccountID: pb.GetAccountId(), TimeUS: pb.GetTimeUs(),
-		Kind: pb.GetKind(), Collection: pb.GetCollection(), Operation: pb.GetOperation()}
+		Kind: pb.GetKind(), Collection: pb.GetCollection(), Operation: pb.GetOperation(),
+		SubjectAccountID: pb.GetSubjectAccountId()}
 }

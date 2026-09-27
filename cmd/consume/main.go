@@ -44,6 +44,8 @@ var (
 		Name: "pulse_consume_tx_retries_total", Help: "Transactions retried after a deadlock or serialization failure."}, []string{"consumer"})
 	decodedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "pulse_consume_decoded_total", Help: "Records decoded, by wire format and schema id."}, []string{"consumer", "format", "schema_id"})
+	subjectTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "pulse_consume_with_subject_total", Help: "Decoded events carrying subject_account_id (schema v2)."}, []string{"consumer"})
 	applySeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "pulse_consume_apply_seconds", Help: "Time to apply one partition batch.", Buckets: prometheus.DefBuckets}, []string{"consumer"})
 )
@@ -168,6 +170,9 @@ func run(log *slog.Logger) error {
 				log.Warn("undecodable record", "partition", r.Partition, "offset", r.Offset, "err", err)
 			} else {
 				rec.Event = ev
+				if ev.SubjectAccountID != "" {
+					subjectTotal.WithLabelValues(id).Inc()
+				}
 				decodedTotal.WithLabelValues(id, string(info.Format), strconv.Itoa(info.SchemaID)).Inc()
 			}
 			byPart[r.Partition] = append(byPart[r.Partition], rec)

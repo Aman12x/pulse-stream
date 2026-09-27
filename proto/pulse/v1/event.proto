@@ -23,4 +23,8 @@ message Event {
   string collection = 5;
   // Commit only: create, update, or delete.
   string operation = 6;
+  // Added in v2. For likes, reposts, follows and blocks: the salted hash of the
+  // account on the other side, so it joins to that account's account_id. Empty
+  // for everything else and for events written by v1 producers.
+  string subject_account_id = 7;
 }

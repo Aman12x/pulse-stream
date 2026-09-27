@@ -29,6 +29,16 @@ func TestProtobufRoundTripCarriesSchemaID(t *testing.T) {
 	}
 }
 
+func TestSubjectSurvivesRoundTrip(t *testing.T) {
+	ev := sample
+	ev.SubjectAccountID = "target"
+	b, _ := Encode(7, ev)
+	got, _, err := Decode(b)
+	if err != nil || got != ev {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+}
+
 func TestDecodesLegacyJSON(t *testing.T) {
 	got, info, err := Decode([]byte(`{"event_id":"e1","account_id":"a1","time_us":1790528400000000,"kind":"commit","collection":"app.bsky.feed.like","operation":"create"}`))
 	if err != nil {
