@@ -70,3 +70,65 @@ place: the checkpoint stalls, which is safe, and a metric and error log say so.
 **Also fixed:** the crash test script's verdict was hidden by piping it through
 `tail`, which reported exit 0 on a failing run. Run it without a pipe, or with
 `set -o pipefail` in the calling shell.
+
+## 2026-09-27 — Stage 2: offsets live in Postgres, in the same transaction as the output
+
+Each partition's batch is applied in one Postgres transaction that deduplicates
+(`seen_events`, `ON CONFLICT DO NOTHING RETURNING`), updates minute aggregates,
+late counts and sessions, and advances that partition's `next_offset`. A crash
+keeps the whole batch or none of it. Kafka's committed offsets are never used;
+on assignment the consumer reads `next_offset` from Postgres
+(`AdjustFetchOffsetsFn`).
+
+Rejected: Kafka transactions (read-process-write exactly-once). They only cover
+output written back to Kafka; the output here is Postgres, so the offset has to
+commit with the Postgres write.
+
+## 2026-09-27 — Fencing: a generation number checked under the row lock
+
+Claiming a partition bumps `partition_state.generation`. Every batch starts with
+`SELECT … FOR UPDATE` on that row and aborts with `ErrFenced` if the generation is
+not its own. Because the claim is an UPDATE of the same row, it waits for any
+in-flight batch of the previous owner: that batch either committed before the
+claim (and the new owner resumes after it) or is fenced after. A consumer frozen
+past its session timeout and then resumed cannot write.
+
+`BlockRebalanceOnPoll` keeps a live member from losing a partition mid-batch; the
+generation check covers the members that are not live (frozen, partitioned).
+
+## 2026-09-27 — CloseAllowingRebalance, found by a hung test run
+
+The first stage 2 run hung for 10 minutes after the clean consumer finished. A
+goroutine dump (SIGQUIT) showed `main.run` blocked in `kgo.(*Client).Close` →
+`LeaveGroupContext`: the last poll before shutdown left rebalancing blocked, and
+leaving the group needs a rebalance. `CloseAllowingRebalance` fixes it; SIGINT now
+exits in under a second.
+
+## 2026-09-27 — Shared rows are written in sorted order
+
+`engagement_minute` rows are shared by all partitions, so concurrent consumers
+could lock them in opposite orders and deadlock. Keys are sorted before the
+`unnest` upsert; a deadlock or serialization failure (40P01, 40001) that still
+happens is retried up to 5 times rather than crashing the consumer.
+
+## 2026-09-27 — Stage 2 test design
+
+Input is a stage 1 chaos topic: real traffic with real duplicates and repair
+events arriving out of order. It is replayed into three schemas: `clean` (one
+undisturbed consumer), `chaos` (three consumers, randomly `kill -9`'d or frozen
+for 15 s against a 10 s session timeout), and `ref` (one consumer on the
+duplicate-free reference topic). Every output table is diffed row by row between
+clean and chaos (`EXCEPT ALL` both ways), and minute aggregates inside the window
+stage 1 verified are diffed between ref and chaos. `PROCESS_DELAY_MS` throttles the
+chaos consumers so the kills land mid-stream; it is a test knob, off by default.
+
+## 2026-09-27 — Reference check reconciles late events per minute
+
+The second stage 2 run (20 s lateness) reported 46/44 minute rows differing from
+the reference, and the first version of `compare` failed it. The reference topic
+has no late events; the chaos topic's repair events arrive about 35 s late and were
+correctly excluded. Checked directly: reference minus under-test totals was 843,
+and the under-test run's late events in those minutes were 843. The check now
+requires, per minute, reference = under test + late, which is the property that
+matters; identical rows are still required when no events were late. Both result
+files were regenerated from the same schemas with the new check (no reprocessing).

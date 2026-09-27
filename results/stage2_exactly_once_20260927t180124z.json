@@ -1,0 +1,65 @@
+{
+  "baseline": "clean_20260927t180124z",
+  "consumers": "3",
+  "duplicates_removed": 66131,
+  "fenced_batches": "6",
+  "freezes": "6",
+  "input_topic": "bsky.events.chaos.20260927T171523Z",
+  "kills": "5",
+  "late_events": 845,
+  "late_seconds": "20",
+  "measured_at": "2026-09-27T18:07:14Z",
+  "pass": true,
+  "records_consumed": 325591,
+  "reference_check": {
+    "minutes_from_utc": "2026-09-27T17:16:00Z",
+    "minutes_not_reconciled": 0,
+    "minutes_to_utc": "2026-09-27T17:25:00Z",
+    "reference_events": 225088,
+    "reference_schema": "ref_20260927t180124z",
+    "rows_only_in_reference": 46,
+    "rows_only_in_under_test": 44,
+    "under_test_late_in_window": 843
+  },
+  "session_gap_seconds": "60",
+  "session_late_events": 0,
+  "tables": {
+    "account_state": {
+      "only_in_baseline": 0,
+      "only_in_under_test": 0,
+      "rows": 55033
+    },
+    "engagement_minute": {
+      "only_in_baseline": 0,
+      "only_in_under_test": 0,
+      "rows": 601
+    },
+    "late_minute": {
+      "only_in_baseline": 0,
+      "only_in_under_test": 0,
+      "rows": 7
+    },
+    "partition_state": {
+      "only_in_baseline": 0,
+      "only_in_under_test": 0,
+      "rows": 6
+    },
+    "seen_events": {
+      "only_in_baseline": 0,
+      "only_in_under_test": 0,
+      "rows": 259460
+    },
+    "session_late": {
+      "only_in_baseline": 0,
+      "only_in_under_test": 0,
+      "rows": 0
+    },
+    "sessions": {
+      "only_in_baseline": 0,
+      "only_in_under_test": 0,
+      "rows": 26790
+    }
+  },
+  "under_test": "chaos_20260927t180124z",
+  "unique_events": 259460
+}
