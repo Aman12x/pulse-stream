@@ -7,8 +7,8 @@ cd "$(dirname "$0")"
 q() { curl -s --max-time 10 "http://127.0.0.1:9090/api/v1/query" --data-urlencode "query=$1" \
       | python3 -c 'import json,sys
 try:
-    r=json.load(sys.stdin)["data"]["result"]; print(round(sum(float(x["value"][1]) for x in r),3) if r else "null")
-except Exception: print("null")'; }
+    r=json.load(sys.stdin)["data"]["result"]; print(round(sum(float(x["value"][1]) for x in r),3) if r else "None")
+except Exception: print("None")'; }
 containers=$(docker compose ps -a --format '{{.Service}} {{.State}}' 2>/dev/null | python3 -c 'import sys,json; print(json.dumps(dict(l.split(None,1) for l in sys.stdin.read().splitlines() if l.strip())))')
 restarts=$(docker inspect -f '{{.RestartCount}}' $(docker compose ps -aq) 2>/dev/null | python3 -c 'import sys; print(sum(int(x) for x in sys.stdin.read().split()))')
 python3 - "$containers" "${restarts:-0}" <<PY
