@@ -5,4 +5,6 @@ Description=pulse-stream capture health sample
 Type=oneshot
 User=opc
 Group=docker
+# HC_PING_URL (healthchecks.io) lives here, next to HASH_SALT; never committed.
+EnvironmentFile=-/home/opc/pulse-stream/deploy/capture/.env
 ExecStart=/bin/bash -c '/home/opc/pulse-stream/deploy/capture/healthcheck.sh >> /home/opc/pulse-health.jsonl 2>> /home/opc/pulse-health.err'
