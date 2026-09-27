@@ -15,7 +15,7 @@ python3 - "$containers" "${restarts:-0}" <<PY
 import json, sys, shutil, datetime
 disk = shutil.disk_usage("/")
 print(json.dumps({
-  "at": datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+  "at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
   "containers": json.loads(sys.argv[1] or "{}"),
   "restarts_total": int(sys.argv[2]),
   "ingest_events_per_s_15m": $(q 'sum(rate(pulse_ingest_events_total[15m]))'),
