@@ -2,3 +2,4 @@ bin/
 logs/
 .env
 deploy/capture/.env
+.venv-dbt/

@@ -1,0 +1,7 @@
+pulse:
+  target: local
+  outputs:
+    local:
+      type: duckdb
+      path: pulse.duckdb
+      threads: 4

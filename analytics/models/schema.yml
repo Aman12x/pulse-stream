@@ -1,0 +1,19 @@
+version: 2
+models:
+  - name: stg_events
+    columns:
+      - name: event_id
+        tests: [unique, not_null]
+      - name: account_id
+        tests: [not_null]
+      - name: time_us
+        tests: [not_null]
+  - name: stg_account_days
+    tests:
+      - unique_combination:
+          arguments:
+            columns: [account_id, event_date]
+  - name: signup_cohorts
+    columns:
+      - name: signups
+        tests: [not_null]

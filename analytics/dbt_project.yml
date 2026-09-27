@@ -1,0 +1,12 @@
+name: pulse
+version: "1.0"
+profile: pulse
+model-paths: [models]
+test-paths: [tests]
+vars:
+  # Parquet written by cmd/archive (pull it from the capture VM with scripts/pull_archive.sh).
+  archive_glob: "data/archive/topic=bsky.events.capture/*/*.parquet"
+models:
+  pulse:
+    staging: {+materialized: view}
+    marts: {+materialized: table}
