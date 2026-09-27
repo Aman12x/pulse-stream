@@ -16,7 +16,7 @@ message Event {
   // Salted hash of the account DID.
   string account_id = 2;
   // Jetstream time, unix microseconds.
-  int64 time_us = 3;
+  string time_us = 3;
   // commit, identity, or account.
   string kind = 4;
   // Commit only, e.g. app.bsky.feed.like.

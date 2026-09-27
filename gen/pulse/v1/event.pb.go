@@ -34,7 +34,7 @@ type Event struct {
 	// Salted hash of the account DID.
 	AccountId string `protobuf:"bytes,2,opt,name=account_id,json=accountId,proto3" json:"account_id,omitempty"`
 	// Jetstream time, unix microseconds.
-	TimeUs int64 `protobuf:"varint,3,opt,name=time_us,json=timeUs,proto3" json:"time_us,omitempty"`
+	TimeUs string `protobuf:"bytes,3,opt,name=time_us,json=timeUs,proto3" json:"time_us,omitempty"`
 	// commit, identity, or account.
 	Kind string `protobuf:"bytes,4,opt,name=kind,proto3" json:"kind,omitempty"`
 	// Commit only, e.g. app.bsky.feed.like.
@@ -93,11 +93,11 @@ func (x *Event) GetAccountId() string {
 	return ""
 }
 
-func (x *Event) GetTimeUs() int64 {
+func (x *Event) GetTimeUs() string {
 	if x != nil {
 		return x.TimeUs
 	}
-	return 0
+	return ""
 }
 
 func (x *Event) GetKind() string {
@@ -137,7 +137,7 @@ const file_pulse_v1_event_proto_rawDesc = "" +
 	"\bevent_id\x18\x01 \x01(\tR\aeventId\x12\x1d\n" +
 	"\n" +
 	"account_id\x18\x02 \x01(\tR\taccountId\x12\x17\n" +
-	"\atime_us\x18\x03 \x01(\x03R\x06timeUs\x12\x12\n" +
+	"\atime_us\x18\x03 \x01(\tR\x06timeUs\x12\x12\n" +
 	"\x04kind\x18\x04 \x01(\tR\x04kind\x12\x1e\n" +
 	"\n" +
 	"collection\x18\x05 \x01(\tR\n" +
