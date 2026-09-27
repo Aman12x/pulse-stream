@@ -64,6 +64,13 @@ func envInt(key string, def int) int {
 	return def
 }
 
+func hostname() string {
+	if h, err := os.Hostname(); err == nil && h != "" {
+		return h
+	}
+	return "c1"
+}
+
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 	if err := run(log); err != nil && !errors.Is(err, context.Canceled) {
@@ -95,7 +102,7 @@ func (o *owner) drop(ps []int32) {
 
 func run(log *slog.Logger) error {
 	var (
-		id       = env("CONSUMER_ID", "c1")
+		id       = env("CONSUMER_ID", hostname()) // replicas get distinct metric labels without per-replica config
 		group    = env("CONSUMER_GROUP", "pulse-consume")
 		topic    = env("KAFKA_TOPIC", "bsky.events")
 		schema   = env("PG_SCHEMA", "pulse")
