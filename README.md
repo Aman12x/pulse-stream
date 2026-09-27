@@ -14,8 +14,8 @@ is read from a file in `results/`, produced by a run you can repeat.
 | 1 | Ingest: Jetstream → Kafka, crash-safe checkpoints | done, see `results/stage1_*` |
 | 2 | Exactly-once consumers, sessions, watermarks | done, see `results/stage2_*` |
 | 3 | Protobuf schemas, registry, CI compatibility gate | done, see `results/stage3_*` |
-| 4 | Leased, fenced backfills into versioned tables | next |
-| 5 | Continuous capture, dbt retention marts, dashboards | planned |
+| 4 | Leased, fenced backfills into versioned tables | done, see `results/stage4_*` |
+| 5 | Continuous capture, dbt retention marts, dashboards | next |
 
 ## Run it
 
@@ -28,6 +28,7 @@ make test-integration           # needs the stack up
 make crash-test                 # stage 1 kill -9 test, writes results/stage1_crash_test_*.json
 ./scripts/chaos_consume.sh      # stage 2 exactly-once test, writes results/stage2_exactly_once_*.json
 ./scripts/rollout_schema.sh     # stage 3 live v1 -> v2 schema rollout, writes results/stage3_rollout_*.json
+TOPIC=<topic> ./scripts/backfill_test.sh   # stage 4 leased backfill + cutover, writes results/stage4_*.json
 ```
 
 ## Stage 1 — ingest
@@ -111,3 +112,25 @@ checkpoint, and compares the result with an untouched reference ingester.
 | Events carrying `subject_account_id` | 36,437 |
 | Missing across the switch, vs 71,541 reference events (168 s window) | 0 |
 | Registering a breaking schema (field 3 retyped) | HTTP 409 |
+
+## Stage 4 — safe reprocessing
+
+`cmd/backfill` rebuilds output for a new logic version (session gap, lateness) from
+the Kafka log into its own schema, with the same exactly-once store as the live
+consumers. A backfill is one job per partition over an offset range fixed at
+planning. Workers take jobs under a lease (`FOR UPDATE SKIP LOCKED`) renewed after
+every batch. A stale worker is fenced twice: its data writes by the partition
+generation, its heartbeat and completion by the job token. Readers use views in the
+`live` schema; `cutover` repoints all of them in one transaction and refuses a
+version that is incomplete or has no recorded diff against the live one.
+
+**Test** (`stage4_backfill_20260927t192926z.json`, 1,103,496 records from a 45-minute live capture):
+
+| Check | Result |
+|---|---|
+| Rebuild of the live version by 2 workers, one frozen mid-job until the other took its job over (505 s, lease 8s) | 7 claims for 6 jobs; the frozen worker's next write was fenced; 0 rows differ from the original |
+| Logic change: session gap 30 min → 5 min | closed sessions 2,674 → 55,445; median closed session 4 s → 21 s; events 1,103,496 in both |
+| Cutover after the diff | live views read version 3: True |
+
+The full diff report is `results/stage4_logic_change_diff_20260927t192926z.json`. Two earlier runs of this test failed
+because the freeze did not force a takeover; why, and the fix, are in the decision log.

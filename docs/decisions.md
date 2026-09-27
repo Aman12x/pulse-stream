@@ -164,3 +164,50 @@ while the script was building, a `go build` failed, and because it sat early in 
 `&&` chain `set -e` did not stop the script, leaving possibly stale binaries in
 the test. Each build is now its own line, so a failed build aborts the run. The
 rerun on a clean `main` is the recorded result.
+
+## 2026-09-27 — Stage 4: a logic version is a schema, rebuilt from the Kafka log
+
+A backfill rebuilds output for a new logic configuration (session gap, lateness)
+into its own schema (`<control>_vN`), using the same exactly-once store as the live
+consumers. It never writes into what readers are using. Readers go through views in
+the live schema, and a cutover repoints every view in one transaction.
+
+Rejected: rewriting the live tables in place. A half-finished or wrong backfill
+would be visible immediately and there is nothing to diff against.
+
+## 2026-09-27 — Leases decide who works; fencing decides whose writes count
+
+A job (one partition, an offset range fixed at planning) is claimed with `SELECT …
+FOR UPDATE SKIP LOCKED` under a lease the worker renews after every batch. A
+lease can expire while its holder is still alive (a GC pause, a frozen VM, a
+network partition), so a lease alone cannot stop a stale worker from writing. Two
+fences do:
+
+- **Data.** Starting a job calls `consume.Store.Claim` on the version schema,
+  which bumps that partition's generation. Every batch checks the generation under
+  the row lock, so the stale worker's next batch is rejected (`ErrFenced`) and
+  none of it is written.
+- **Job state.** Each claim bumps the job's token; heartbeat and completion require
+  the current token, so a stale worker cannot mark a job done.
+
+The claim waits for the stale worker's in-flight transaction (same row lock), so a
+batch either commits before the takeover and the new owner resumes after it, or
+is fenced.
+
+## 2026-09-27 — Cutover requires a complete version and a recorded diff
+
+`Cutover` refuses a version whose jobs are not all done, and one without a diff
+report recorded by `backfill diff` against the live version. The diff reports
+events, late events, unique events, closed and open sessions and median session
+length for both versions, and rows differing per output table.
+
+The stage 4 test freezes a worker only once it is inside a job; the first dry run
+froze it on a timer and on a small topic the worker had already finished, so no
+takeover happened and the test (correctly) failed.
+
+A recorded run on the 45-minute capture (1,103,496 records) failed the same way:
+each job took over a minute at the throttled rate, B was busy for the whole 20 s
+freeze, and A woke with its lease renewed (6 claims for 6 jobs). The system was
+correct (the replica matched with 0 rows differing); the test had not created the
+condition it checks. The freeze now lasts until the jobs table shows another
+worker has claimed the frozen worker's job, and that run's files were discarded.

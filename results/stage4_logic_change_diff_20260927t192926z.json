@@ -1,0 +1,49 @@
+{
+  "baseline": {
+    "closed_sessions": 2674,
+    "config": "gap 1800s, late 300s; baseline",
+    "events_in_aggregates": 1103496,
+    "late_events": 0,
+    "median_session_events": 2,
+    "median_session_seconds": 4,
+    "open_sessions": 158641,
+    "schema": "bf_20260927t192926z_v1",
+    "unique_events": 1103496,
+    "version": 1
+  },
+  "candidate": {
+    "closed_sessions": 55445,
+    "config": "gap 300s, late 300s; session gap 30 min -\u003e 5 min",
+    "events_in_aggregates": 1103496,
+    "late_events": 0,
+    "median_session_events": 2,
+    "median_session_seconds": 21,
+    "open_sessions": 158641,
+    "schema": "bf_20260927t192926z_v3",
+    "unique_events": 1103496,
+    "version": 3
+  },
+  "measured_at": "2026-09-27T19:41:48Z",
+  "rows_differing": {
+    "account_state": {
+      "only_in_baseline": 37735,
+      "only_in_candidate": 37735
+    },
+    "engagement_minute": {
+      "only_in_baseline": 0,
+      "only_in_candidate": 0
+    },
+    "late_minute": {
+      "only_in_baseline": 0,
+      "only_in_candidate": 0
+    },
+    "session_late": {
+      "only_in_baseline": 0,
+      "only_in_candidate": 0
+    },
+    "sessions": {
+      "only_in_baseline": 90,
+      "only_in_candidate": 52861
+    }
+  }
+}

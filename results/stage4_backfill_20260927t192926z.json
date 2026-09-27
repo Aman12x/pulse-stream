@@ -1,0 +1,51 @@
+{
+  "measured_at": "2026-09-27T19:40:56Z",
+  "topic": "bsky.events.capture.s4",
+  "records_in_range": 1103496,
+  "replica": {
+    "version": 2,
+    "rebuilds_version": 1,
+    "lease": "8s",
+    "freeze_seconds": 505,
+    "jobs": 6,
+    "claims": 7,
+    "job_outcomes": {
+      "A fenced": 1,
+      "B done": 6
+    },
+    "stale_worker_rejections": 1,
+    "rows_differing_from_baseline": 0
+  },
+  "logic_change": {
+    "from": {
+      "closed_sessions": 2674,
+      "config": "gap 1800s, late 300s; baseline",
+      "events_in_aggregates": 1103496,
+      "late_events": 0,
+      "median_session_events": 2,
+      "median_session_seconds": 4,
+      "open_sessions": 158641,
+      "schema": "bf_20260927t192926z_v1",
+      "unique_events": 1103496,
+      "version": 1
+    },
+    "to": {
+      "closed_sessions": 55445,
+      "config": "gap 300s, late 300s; session gap 30 min -> 5 min",
+      "events_in_aggregates": 1103496,
+      "late_events": 0,
+      "median_session_events": 2,
+      "median_session_seconds": 21,
+      "open_sessions": 158641,
+      "schema": "bf_20260927t192926z_v3",
+      "unique_events": 1103496,
+      "version": 3
+    },
+    "diff_report": "results/stage4_logic_change_diff_20260927t192926z.json"
+  },
+  "cutover": {
+    "live_version": 3,
+    "live_views_read_new_version": true
+  },
+  "pass": true
+}
