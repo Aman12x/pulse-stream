@@ -1,0 +1,14 @@
+{
+  "chaos_events_not_in_reference": 0,
+  "chaos_records_in_window": 317010,
+  "chaos_unique_events_in_window": 250879,
+  "duplicate_records_in_chaos": 66131,
+  "kills": 10,
+  "measured_at": "2026-09-27T17:26:22Z",
+  "missing_from_chaos": 0,
+  "reference_duplicate_records": 0,
+  "reference_events_in_window": 250879,
+  "window_end_utc": "2026-09-27T17:25:51Z",
+  "window_seconds": 602,
+  "window_start_utc": "2026-09-27T17:15:48Z"
+}

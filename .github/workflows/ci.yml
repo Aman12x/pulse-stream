@@ -1,0 +1,30 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: pulse
+          POSTGRES_PASSWORD: pulse
+          POSTGRES_DB: pulse
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U pulse" --health-interval 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Lint
+        run: make lint
+      - name: Unit tests
+        run: go test -race ./...
+      - name: Integration tests
+        run: go test -race -tags integration ./...
