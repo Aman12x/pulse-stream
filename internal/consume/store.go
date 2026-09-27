@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS seen_events (
     event_id text   PRIMARY KEY,
     time_us  bigint NOT NULL
 );
+CREATE INDEX IF NOT EXISTS seen_events_time_us ON seen_events (time_us);
 CREATE TABLE IF NOT EXISTS engagement_minute (
     minute_us  bigint NOT NULL,
     kind       text   NOT NULL,
@@ -313,4 +314,25 @@ func (s *Store) write(ctx context.Context, tx pgx.Tx, topic string, partition in
 		}
 	}
 	return nil
+}
+
+// PruneSeen deletes dedupe entries for events older than cutoffUS, in batches so
+// no single statement holds locks for long. The dedupe window is therefore
+// bounded: a duplicate arriving after its original has been pruned is counted
+// again. Duplicates in this pipeline come from ingest restarts and handoff
+// repairs, which replay seconds to minutes, so a window of days is ample.
+func (s *Store) PruneSeen(ctx context.Context, cutoffUS int64, batch int) (int64, error) {
+	var total int64
+	for {
+		tag, err := s.pool.Exec(ctx, `
+			DELETE FROM seen_events WHERE event_id IN (
+			    SELECT event_id FROM seen_events WHERE time_us < $1 LIMIT $2)`, cutoffUS, batch)
+		if err != nil {
+			return total, err
+		}
+		total += tag.RowsAffected()
+		if tag.RowsAffected() < int64(batch) {
+			return total, nil
+		}
+	}
 }

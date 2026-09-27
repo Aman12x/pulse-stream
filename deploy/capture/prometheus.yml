@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 15s
+scrape_configs:
+  - job_name: ingest
+    static_configs: [{targets: ["ingest:9101"]}]
+  - job_name: consume
+    dns_sd_configs: [{names: ["consume"], type: A, port: 9111}]
+  - job_name: archive
+    static_configs: [{targets: ["archive:9121"]}]

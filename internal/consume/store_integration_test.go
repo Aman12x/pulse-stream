@@ -118,3 +118,22 @@ func TestSessionClosedAcrossBatches(t *testing.T) {
 		t.Fatalf("session = %d %d %d", start, end, events)
 	}
 }
+
+func TestPruneSeenDropsOnlyOldEntries(t *testing.T) {
+	ctx := context.Background()
+	s := openTest(t)
+	gen, _, _ := s.Claim(ctx, "t", 0)
+	recs := []Record{rec(0, "old1", "a", 100), rec(1, "old2", "a", 200), rec(2, "new", "a", 5_000)}
+	if _, err := s.Apply(ctx, "t", 0, gen, recs); err != nil {
+		t.Fatal(err)
+	}
+	n, err := s.PruneSeen(ctx, 1_000, 1) // batch of 1 exercises the loop
+	if err != nil || n != 2 {
+		t.Fatalf("pruned %d, %v; want 2", n, err)
+	}
+	var left int64
+	s.pool.QueryRow(ctx, "SELECT count(*) FROM seen_events").Scan(&left)
+	if left != 1 {
+		t.Fatalf("%d entries left, want 1", left)
+	}
+}

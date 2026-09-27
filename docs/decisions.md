@@ -211,3 +211,29 @@ freeze, and A woke with its lease renewed (6 claims for 6 jobs). The system was
 correct (the replica matched with 0 rows differing); the test had not created the
 condition it checks. The freeze now lasts until the jobs table shows another
 worker has claimed the frozen worker's job, and that run's files were discarded.
+
+## 2026-09-27 — Stage 5: an unattended multi-day capture
+
+The capture runs on one always-on VM (Oracle Cloud, Ampere A1, Oracle Linux 9)
+from `deploy/capture/docker-compose.yml`: Kafka, schema registry, Postgres, the
+ingester, two consumers, the Parquet archiver, Prometheus and Grafana. Every
+service restarts on failure; Kafka, Postgres and the archive are on named volumes.
+Nothing is exposed publicly: Grafana and Prometheus bind to 127.0.0.1 and are
+reached through an SSH tunnel. `HASH_SALT` lives only in `deploy/capture/.env` on
+the VM (gitignored).
+
+Two things a days-long run needed that the tests did not:
+- **The dedupe table was unbounded.** `seen_events` now keeps a 48-hour window
+  (`DEDUPE_WINDOW_HOURS`), pruned every 10 minutes in batches. A duplicate that
+  arrives after its original was pruned would be counted twice; duplicates here
+  come from restarts and handoff repairs, seconds to minutes later.
+- **Retention was hard-coded to 7 days.** `TOPIC_RETENTION_HOURS` sets it at topic
+  creation; the capture topic keeps 14 days so it can be backfilled end to end.
+
+The analytics layer reads Parquet written by `cmd/archive`: one file per
+partition offset range, renamed into place before its offset is committed. That
+is at-least-once, so the dbt staging model deduplicates by `event_id`.
+
+Rejected: reading the analytics layer straight from the consumers' Postgres
+tables. Those hold aggregates and sessions, not the event log, and the funnel and
+cohort questions need per-account, per-day activity.

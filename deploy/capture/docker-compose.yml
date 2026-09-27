@@ -1,0 +1,118 @@
+# Long-running capture stack for stage 5 (one VM). Every service restarts on
+# failure; Kafka, Postgres and the Parquet archive live on named volumes so a
+# reboot or container restart loses nothing. Nothing listens on a public port:
+# Grafana and Prometheus bind to 127.0.0.1 and are reached through an SSH tunnel.
+x-app: &app
+  build: {context: ../.., dockerfile: Dockerfile}
+  image: pulse-stream:local
+  restart: unless-stopped
+  environment: &env
+    KAFKA_BROKERS: kafka:19092
+    KAFKA_TOPIC: bsky.events.capture
+    PG_DSN: postgres://pulse:pulse@postgres:5432/pulse?sslmode=disable
+    SCHEMA_REGISTRY_URL: http://schema-registry:8081
+  depends_on:
+    kafka: {condition: service_healthy}
+    postgres: {condition: service_healthy}
+    schema-registry: {condition: service_healthy}
+
+services:
+  kafka:
+    image: apache/kafka:4.1.0
+    restart: unless-stopped
+    volumes: ["kafka:/var/lib/kafka/data"]
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://:19092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_HEAP_OPTS: -Xms512m -Xmx1g
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:19092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:8.0.0
+    restart: unless-stopped
+    depends_on: {kafka: {condition: service_healthy}}
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:19092
+      SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL: backward
+      SCHEMA_REGISTRY_HEAP_OPTS: -Xms128m -Xmx384m
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/subjects > /dev/null"]
+      interval: 10s
+      retries: 30
+
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment: {POSTGRES_USER: pulse, POSTGRES_PASSWORD: pulse, POSTGRES_DB: pulse}
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pulse"]
+      interval: 5s
+      retries: 30
+
+  ingest:
+    <<: *app
+    command: ["ingest"]
+    environment:
+      <<: *env
+      INGEST_ID: capture
+      HASH_SALT: ${HASH_SALT:?set HASH_SALT in deploy/capture/.env}
+      TOPIC_RETENTION_HOURS: "336"
+      METRICS_ADDR: ":9101"
+
+  consume:
+    <<: *app
+    command: ["consume"]
+    deploy: {replicas: 2}
+    environment:
+      <<: *env
+      CONSUMER_GROUP: capture-consume
+      PG_SCHEMA: capture
+      DEDUPE_WINDOW_HOURS: "48"
+      METRICS_ADDR: ":9111"
+
+  archive:
+    <<: *app
+    command: ["archive"]
+    user: "65532:65532"
+    volumes: ["archive:/archive"]
+    environment:
+      <<: *env
+      CONSUMER_GROUP: capture-archive
+      ARCHIVE_DIR: /archive
+      METRICS_ADDR: ":9121"
+
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    restart: unless-stopped
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=30d"]
+    volumes: ["./prometheus.yml:/etc/prometheus/prometheus.yml:ro", "prom:/prometheus"]
+    ports: ["127.0.0.1:9090:9090"]
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    restart: unless-stopped
+    environment: {GF_AUTH_ANONYMOUS_ENABLED: "true", GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer}
+    volumes:
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["127.0.0.1:3000:3000"]
+
+volumes: {kafka: {}, pgdata: {}, archive: {}, prom: {}}

@@ -153,6 +153,26 @@ func run(log *slog.Logger) error {
 
 	go serveMetrics(log, env("METRICS_ADDR", ":9111"))
 
+	// Bound the dedupe table on long runs. 0 disables pruning.
+	if keep := envInt("DEDUPE_WINDOW_HOURS", 48); keep > 0 {
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-time.After(10 * time.Minute):
+				}
+				cutoff := time.Now().Add(-time.Duration(keep) * time.Hour).UnixMicro()
+				n, err := store.PruneSeen(ctx, cutoff, 50_000)
+				if err != nil && ctx.Err() == nil {
+					log.Warn("dedupe prune failed", "err", err)
+				} else if n > 0 {
+					log.Info("dedupe pruned", "rows", n, "window_hours", keep)
+				}
+			}
+		}()
+	}
+
 	for {
 		fs := cl.PollRecords(ctx, maxRecs)
 		if ctx.Err() != nil {

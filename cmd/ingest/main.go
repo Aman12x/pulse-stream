@@ -111,7 +111,7 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	defer kc.Close()
-	if err := ensureTopic(ctx, kc, topic); err != nil {
+	if err := ensureTopic(ctx, kc, topic, envInt("TOPIC_RETENTION_HOURS", 168)); err != nil {
 		return err
 	}
 
@@ -287,9 +287,12 @@ func run(log *slog.Logger) error {
 	}
 }
 
-func ensureTopic(ctx context.Context, kc *kgo.Client, topic string) error {
+// ensureTopic creates the topic if it is missing. Retention only applies at
+// creation; an existing topic keeps its own setting.
+func ensureTopic(ctx context.Context, kc *kgo.Client, topic string, retentionHours int) error {
 	adm := kadm.NewClient(kc)
-	resp, err := adm.CreateTopic(ctx, 6, 1, map[string]*string{"retention.ms": ptr("604800000")}, topic)
+	ms := strconv.FormatInt(int64(retentionHours)*3_600_000, 10)
+	resp, err := adm.CreateTopic(ctx, 6, 1, map[string]*string{"retention.ms": &ms}, topic)
 	if err == nil {
 		err = resp.Err
 	}
@@ -298,8 +301,6 @@ func ensureTopic(ctx context.Context, kc *kgo.Client, topic string) error {
 	}
 	return nil
 }
-
-func ptr(s string) *string { return &s }
 
 func serveMetrics(log *slog.Logger, addr string) {
 	mux := http.NewServeMux()
