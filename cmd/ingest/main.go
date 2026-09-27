@@ -27,8 +27,10 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/Aman12x/pulse-stream/internal/checkpoint"
+	"github.com/Aman12x/pulse-stream/internal/codec"
 	"github.com/Aman12x/pulse-stream/internal/ingest"
 	"github.com/Aman12x/pulse-stream/internal/jetstream"
+	protoschema "github.com/Aman12x/pulse-stream/proto"
 )
 
 var (
@@ -84,6 +86,7 @@ func run(log *slog.Logger) error {
 		repairUS = int64(envInt("REPAIR_WINDOW_SECONDS", 5)) * 1_000_000
 		repairIn = time.Duration(envInt("REPAIR_DELAY_SECONDS", 30)) * time.Second
 	)
+	format := env("FORMAT", "protobuf")
 	if salt == "" {
 		return errors.New("HASH_SALT is required (account ids are salted hashes)")
 	}
@@ -110,6 +113,18 @@ func run(log *slog.Logger) error {
 	defer kc.Close()
 	if err := ensureTopic(ctx, kc, topic); err != nil {
 		return err
+	}
+
+	// Protobuf events carry the registry id of the schema this binary was built with.
+	schemaID := 0
+	if format == "protobuf" {
+		schemaID, err = codec.Register(ctx, env("SCHEMA_REGISTRY_URL", "http://localhost:8081"), topic+"-value", protoschema.EventProto)
+		if err != nil {
+			return err
+		}
+		log.Info("schema registered", "subject", topic+"-value", "schema_id", schemaID)
+	} else if format != "json" {
+		return errors.New("FORMAT must be protobuf or json")
 	}
 
 	saved, err := store.Load(ctx, id)
@@ -248,7 +263,12 @@ func run(log *slog.Logger) error {
 				malformedTotal.WithLabelValues(id).Inc()
 				continue
 			}
-			val, _ := json.Marshal(ev)
+			var val []byte
+			if format == "json" {
+				val, _ = json.Marshal(ev)
+			} else if val, err = codec.Encode(schemaID, ev); err != nil {
+				return err
+			}
 			kinds[ev.Kind]++
 			if batcher.Add([]byte(ev.AccountID), val, ev.TimeUS) {
 				if err := flush(); err != nil {

@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/twmb/franz-go/pkg/kadm"
+
+	"github.com/Aman12x/pulse-stream/internal/codec"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
@@ -62,13 +64,8 @@ func scan(ctx context.Context, brokers []string, topic string) (*topicScan, erro
 			return nil, err
 		}
 		fs.EachRecord(func(r *kgo.Record) {
-			var ev struct {
-				EventID    string `json:"event_id"`
-				TimeUS     int64  `json:"time_us"`
-				Kind       string `json:"kind"`
-				Collection string `json:"collection"`
-			}
-			if json.Unmarshal(r.Value, &ev) != nil {
+			ev, _, err := codec.Decode(r.Value)
+			if err != nil {
 				return
 			}
 			var k id

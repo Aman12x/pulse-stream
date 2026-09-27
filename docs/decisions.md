@@ -132,3 +132,25 @@ and the under-test run's late events in those minutes were 843. The check now
 requires, per minute, reference = under test + late, which is the property that
 matters; identical rows are still required when no events were late. Both result
 files were regenerated from the same schemas with the new check (no reprocessing).
+
+## 2026-09-27 — Stage 3: Protobuf in the Confluent wire format, two compatibility gates
+
+Events move from JSON to Protobuf (`proto/pulse/v1/event.proto`), framed in the
+Confluent wire format (magic byte, registry schema id, message index). Consumers
+decode both, so topics written before the migration stay readable.
+
+Two gates, because they catch different mistakes. `buf breaking` in CI compares
+the .proto against the base branch and fails a pull request that renumbers,
+retypes or removes a field. The schema registry, set to BACKWARD, checks the schema
+a binary actually registers at startup; an ingester built against an incompatible
+schema gets a 409 and does not start, so it can never write events the running
+consumers cannot read.
+
+Rollout order under BACKWARD is consumers first: the new schema must be able to
+read data written with the old one, so readers upgrade before writers. (The stage
+plan had said producer first; that was wrong for this compatibility mode.)
+
+Kafka now has two listeners (kafka:19092 inside the Compose network, localhost:9092
+for the host) so the registry container can reach it. Recreating the container
+dropped the stage 1 and 2 topics; their results are in `results/`, and rerunning
+those tests needs a fresh stage 1 run first.

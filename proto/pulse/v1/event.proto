@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package pulse.v1;
+
+option go_package = "github.com/Aman12x/pulse-stream/gen/pulse/v1;pulsev1";
+
+// Event is one normalized Jetstream event. Record bodies are never carried and
+// every account identifier is a salted hash (see docs/decisions.md).
+//
+// Evolution rules, enforced by `buf breaking` in CI and by the schema registry's
+// BACKWARD compatibility at runtime: never renumber, retype, or reuse a field;
+// reserve the number and name of any field that is removed.
+message Event {
+  // Stable id of the underlying repo change; identical across replays.
+  string event_id = 1;
+  // Salted hash of the account DID.
+  string account_id = 2;
+  // Jetstream time, unix microseconds.
+  int64 time_us = 3;
+  // commit, identity, or account.
+  string kind = 4;
+  // Commit only, e.g. app.bsky.feed.like.
+  string collection = 5;
+  // Commit only: create, update, or delete.
+  string operation = 6;
+}

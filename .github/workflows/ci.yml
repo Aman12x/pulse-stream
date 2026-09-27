@@ -5,6 +5,27 @@ on:
   pull_request:
 
 jobs:
+  schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # buf breaking reads the base branch from git history
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Install buf and protoc-gen-go
+        run: |
+          go install github.com/bufbuild/buf/cmd/buf@v1.73.0
+          go install google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.12
+      - name: Lint
+        run: buf lint
+      - name: Generated code is up to date
+        run: buf generate && git diff --exit-code gen/
+      - name: No breaking change against the base branch
+        if: github.event_name == 'pull_request'
+        run: buf breaking --against ".git#branch=origin/${{ github.base_ref }}"
+
   test:
     runs-on: ubuntu-latest
     services:

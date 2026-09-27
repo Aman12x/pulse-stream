@@ -13,7 +13,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -32,6 +31,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/twmb/franz-go/pkg/kgo"
 
+	"github.com/Aman12x/pulse-stream/internal/codec"
 	"github.com/Aman12x/pulse-stream/internal/consume"
 )
 
@@ -42,6 +42,8 @@ var (
 		Name: "pulse_consume_fenced_total", Help: "Batches rejected because a newer owner claimed the partition."}, []string{"consumer"})
 	retriesTotal = promauto.NewCounterVec(prometheus.CounterOpts{
 		Name: "pulse_consume_tx_retries_total", Help: "Transactions retried after a deadlock or serialization failure."}, []string{"consumer"})
+	decodedTotal = promauto.NewCounterVec(prometheus.CounterOpts{
+		Name: "pulse_consume_decoded_total", Help: "Records decoded, by wire format and schema id."}, []string{"consumer", "format", "schema_id"})
 	applySeconds = promauto.NewHistogramVec(prometheus.HistogramOpts{
 		Name: "pulse_consume_apply_seconds", Help: "Time to apply one partition batch.", Buckets: prometheus.DefBuckets}, []string{"consumer"})
 )
@@ -159,8 +161,14 @@ func run(log *slog.Logger) error {
 		byPart := map[int32][]consume.Record{}
 		fs.EachRecord(func(r *kgo.Record) {
 			rec := consume.Record{Offset: r.Offset}
-			if err := json.Unmarshal(r.Value, &rec.Event); err != nil || rec.Event.EventID == "" {
+			ev, info, err := codec.Decode(r.Value)
+			if err != nil {
 				rec.Malformed = true
+				decodedTotal.WithLabelValues(id, "malformed", "").Inc()
+				log.Warn("undecodable record", "partition", r.Partition, "offset", r.Offset, "err", err)
+			} else {
+				rec.Event = ev
+				decodedTotal.WithLabelValues(id, string(info.Format), strconv.Itoa(info.SchemaID)).Inc()
 			}
 			byPart[r.Partition] = append(byPart[r.Partition], rec)
 		})
