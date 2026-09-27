@@ -13,8 +13,8 @@ is read from a file in `results/`, produced by a run you can repeat.
 | 0 | Skeleton: Compose stack, CI, Makefile | done |
 | 1 | Ingest: Jetstream → Kafka, crash-safe checkpoints | done, see `results/stage1_*` |
 | 2 | Exactly-once consumers, sessions, watermarks | done, see `results/stage2_*` |
-| 3 | Protobuf schemas, registry, CI compatibility gate | next |
-| 4 | Leased, fenced backfills into versioned tables | planned |
+| 3 | Protobuf schemas, registry, CI compatibility gate | done, see `results/stage3_*` |
+| 4 | Leased, fenced backfills into versioned tables | next |
 | 5 | Continuous capture, dbt retention marts, dashboards | planned |
 
 ## Run it
@@ -27,6 +27,7 @@ make test                       # unit tests
 make test-integration           # needs the stack up
 make crash-test                 # stage 1 kill -9 test, writes results/stage1_crash_test_*.json
 ./scripts/chaos_consume.sh      # stage 2 exactly-once test, writes results/stage2_exactly_once_*.json
+./scripts/rollout_schema.sh     # stage 3 live v1 -> v2 schema rollout, writes results/stage3_rollout_*.json
 ```
 
 ## Stage 1 — ingest
@@ -81,3 +82,32 @@ The second run shortens the session gap to 60 s and the lateness bound to 20 s s
 that session closing and the late path both run under failure; with the defaults the
 10-minute input closes no sessions and has no late events. Its 843 late events
 inside the window are exactly the difference from the reference.
+
+## Stage 3 — schema evolution
+
+Events are Protobuf (`proto/pulse/v1/event.proto`) in the Confluent wire format:
+each record carries the schema registry id of the schema its producer was built
+with. Two gates keep schema changes safe:
+
+- **CI:** `buf breaking` compares every pull request's schema with the base branch.
+  [PR #1](https://github.com/Aman12x/pulse-stream/pull/1) retyped `time_us` from
+  int64 to string on purpose; the check failed it with `Field "3" with name
+  "time_us" on message "Event" changed type from "int64" to "string"`.
+- **Runtime:** the schema registry is set to BACKWARD. The ingester registers its
+  schema at startup, so a binary built against an incompatible schema gets a 409
+  and never starts.
+
+**Live rollout.** Schema v2 adds `subject_account_id`, the hashed account a like,
+repost, follow or block points at. `scripts/rollout_schema.sh` starts consumers
+built with v2 (consumers first, as BACKWARD requires), runs an ingester built from
+tag `stage-3a` (v1), replaces it mid-stream with the v2 ingester on the same
+checkpoint, and compares the result with an untouched reference ingester.
+
+| Result (`stage3_rollout_20260927T182042Z.json`) | |
+|---|---|
+| Registry versions for the subject | 2 |
+| Records decoded, schema v1 / v2 | 41,371 / 45,057 |
+| Undecodable records, consumer error logs | 0, 0 |
+| Events carrying `subject_account_id` | 36,437 |
+| Missing across the switch, vs 71,541 reference events (168 s window) | 0 |
+| Registering a breaking schema (field 3 retyped) | HTTP 409 |

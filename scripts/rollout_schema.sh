@@ -18,7 +18,12 @@ WT=$(mktemp -d)
 git worktree add -q "$WT" stage-3a
 (cd "$WT" && go build -o "$OLDPWD/bin/ingest-v1" ./cmd/ingest)
 git worktree remove --force "$WT"
-go build -o bin/ingest ./cmd/ingest && go build -o bin/consume ./cmd/consume && go build -o bin/verify ./cmd/verify && go build -o bin/compare ./cmd/compare
+# One command per line: under set -e a failure early in an && chain does not stop
+# the script, and a stale binary would silently invalidate the test.
+go build -o bin/ingest ./cmd/ingest
+go build -o bin/consume ./cmd/consume
+go build -o bin/verify ./cmd/verify
+go build -o bin/compare ./cmd/compare
 
 INGEST_ID=ref-$RUN KAFKA_TOPIC=$REFTOPIC METRICS_ADDR=:9102 ./bin/ingest 2>"logs/rollout-ref-$RUN.log" &
 REF=$!

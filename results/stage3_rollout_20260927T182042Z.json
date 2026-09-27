@@ -1,0 +1,20 @@
+{
+  "measured_at": "2026-09-27T18:24:34Z",
+  "topic": "bsky.events.rollout.20260927T182042Z",
+  "registry_versions": {
+    "1": 1,
+    "2": 2
+  },
+  "decoded_by_schema": {
+    "protobuf schema 1": 41371,
+    "protobuf schema 2": 45057
+  },
+  "undecodable_records": 0,
+  "events_with_subject_account_id": 36437,
+  "consumer_error_logs": 0,
+  "breaking_schema_registration_http_status": 409,
+  "reference_events_in_window": 71541,
+  "missing_across_rollout": 0,
+  "window_seconds": 168,
+  "pass": true
+}

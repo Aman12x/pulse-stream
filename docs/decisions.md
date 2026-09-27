@@ -154,3 +154,13 @@ Kafka now has two listeners (kafka:19092 inside the Compose network, localhost:9
 for the host) so the registry container can reach it. Recreating the container
 dropped the stage 1 and 2 topics; their results are in `results/`, and rerunning
 those tests needs a fresh stage 1 run first.
+
+## 2026-09-27 — Rollout test, and a run thrown away
+
+`scripts/rollout_schema.sh` builds the v1 ingester from tag `stage-3a` in a
+temporary git worktree, so "v1" is the real old binary, not a flag. The first run
+was discarded: the working tree was switched to the breaking-change demo branch
+while the script was building, a `go build` failed, and because it sat early in an
+`&&` chain `set -e` did not stop the script, leaving possibly stale binaries in
+the test. Each build is now its own line, so a failed build aborts the run. The
+rerun on a clean `main` is the recorded result.
