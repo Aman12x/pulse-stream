@@ -1,0 +1,8 @@
+[Unit]
+Description=pulse-stream capture health sample
+
+[Service]
+Type=oneshot
+User=opc
+Group=docker
+ExecStart=/bin/bash -c '/home/opc/pulse-stream/deploy/capture/healthcheck.sh >> /home/opc/pulse-health.jsonl 2>> /home/opc/pulse-health.err'
